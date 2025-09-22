@@ -133,10 +133,9 @@ class TransformToMapNode(Node):
             self.get_logger().error(f"Error loading YAML file: {e}")
             self.semantic_data = {}
 
-    def addObjToYaml(self, point_in_map, obj_class):
-        """Add object to semantic map"""
+    def addObjToYaml(self, point_in_map, obj_class, saved_pts):
         object_id = ""
-        new_position = np.array([
+        new_pos = np.array([
             float(point_in_map.point.x),
             float(point_in_map.point.y),
             float(point_in_map.point.z)
@@ -146,29 +145,53 @@ class TransformToMapNode(Node):
             self.semantic_data['objects'] = []
 
         updated = False
+
         for obj in self.semantic_data['objects']:
-            if obj.get('object_type') == obj_class:
-                old_pos = np.array(obj.get('position', [0, 0, 0]))
-                dist = np.linalg.norm(new_position - old_pos)
-                if dist <= self.position_tolerance:
-                    # Overwrite object
-                    obj['position'] = new_position.tolist()
-                    updated = True
-                    object_id = obj['id']
-                    break
+            if obj.get('object_type') != obj_class:
+                continue
+
+            old_pos = np.array(obj.get('position', [0.0, 0.0, 0.0]))
+            dist = np.linalg.norm(new_pos - old_pos)
+            if dist > self.position_tolerance:
+                continue
+
+            # Prüfe Überschneidung mit bereits gespeicherten Punkten
+            def to_arr(pt_stamped):
+                return np.array([
+                    float(pt_stamped.point.x),
+                    float(pt_stamped.point.y),
+                    float(pt_stamped.point.z)
+                ])
+
+            skip = any(np.allclose(old_pos, to_arr(saved_pt), rtol=1e-5, atol=1e-8)
+                    for saved_pt in saved_pts)
+
+            if skip:
+                print("SKIPPE PUNKT, WEIL ÜBERSCHNEIDUNG IN EINEM BILD", flush=True)
+                updated = False
+                # Wenn du hier GAR NICHTS mehr updaten willst, kannst du auch:
+                # break
+                continue
+            else:
+                # print("Überschreibe PT", old_pos, new_pos, flush=True)
+                obj['position'] = new_pos.tolist()
+                updated = True
+                object_id = obj['id']
+                break  # wichtig: äußere Schleife verlassen
+
+        print("UPDATED:", updated, flush=True)
 
         if not updated:
-            # Create new entry
+            print("ERZEUGE NEUEN PUNKT", flush=True)
             object_id = self.generate_next_id(obj_class)
             new_object = {
                 'object_type': obj_class,
                 'id': object_id,
-                'position': new_position.tolist()
+                'position': new_pos.tolist()
             }
             self.semantic_data['objects'].append(new_object)
-            self.get_logger().info(
-                f"Added new {obj_class} with id {object_id}"
-            )
+            self.get_logger().info(f"Added new {obj_class} with id {object_id}")
+
         return object_id
 
     def generate_next_id(self, obj_class):
@@ -263,7 +286,6 @@ class TransformToMapNode(Node):
             
             # Add filename to path (with image extension)
             filepath = os.path.join(self.path_to_annotated_imgs, f"{obj_id}.jpg")
-            print("Speichere in ", filepath, flush=True)
             success = cv2.imwrite(filepath, cv_image)
             if not success:
                 raise RuntimeError(f"Couldn't save {filepath}")
@@ -361,6 +383,9 @@ class TransformToMapNode(Node):
         pt_camera_frame.header = detections_arr.header
         pt_camera_frame.header.frame_id = self.camera_frame
         obj_id = ""
+        i = 0
+        saved_pts = []
+        print("ANZ OBJ: ", len(detections_arr.detections), flush=True)
         for detection in detections_arr.detections:
             if not detection.results:
                 self.get_logger().warn("Detection without results – skipping")
@@ -388,10 +413,13 @@ class TransformToMapNode(Node):
                 )
                 return False
             else:
-                obj_id = self.addObjToYaml(pt_map, obj_class)
+                print("Loop NR.", i, flush=True)
+                obj_id = self.addObjToYaml(pt_map, obj_class, saved_pts)
+                saved_pts.append(pt_map)
                 # if saved_to_yaml:
                 #     print("SPEICHERE BILD", flush=True)
                 self.saveDetectionImg(obj_id, img)
+                i +=1
 
                 # self.marker = createMarker(obj_class, obj_id, self.base_frame, pt_base_link)      # comment in to visualize the marker directly in RViz
                 # self.marker.lifetime = rclpy.duration.Duration(seconds=1).to_msg()

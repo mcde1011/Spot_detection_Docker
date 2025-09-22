@@ -41,7 +41,7 @@ def generate_launch_description():
         DeclareLaunchArgument('iou',        default_value='0.45'),
 
         # Publisher
-        DeclareLaunchArgument('processing_mode', default_value='stitch_local'),
+        DeclareLaunchArgument('processing_mode', default_value='camera_stitch'),
         DeclareLaunchArgument('period_s',        default_value='1.0'),
         DeclareLaunchArgument('out_w',           default_value='1280'),
         DeclareLaunchArgument('out_h',           default_value='640'),

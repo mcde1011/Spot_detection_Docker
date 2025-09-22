@@ -2,8 +2,8 @@ services:
   ros2_dev:
     image: my-ros2:humble-gpu
     container_name: ros2_dev
-    stdin_open: true   # -i
-    tty: true          # -t
+    stdin_open: false   # -i
+    tty: false          # -t
     ipc: host
     network_mode: host
     shm_size: 1g
@@ -23,3 +23,14 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    command: >
+      bash -lc '
+        set -e
+        source /ros2_ws/install/setup.bash
+        export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+        ros2 launch ricoh_theta_ros full_stack.launch.py device:=cuda:0 imgsz:=640 iou:=0.45 period_s:=1.0 log_timing_level:=info processing_mode:=camera_stitch &
+        bgpid=$!
+        trap "kill -TERM $bgpid 2>/dev/null || true" TERM INT
+        ros2 launch transform_to_map transform_to_map_launch.py
+        wait $bgpid
+      '

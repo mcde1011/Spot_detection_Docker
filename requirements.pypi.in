@@ -1,9 +1,0 @@
-# Nur PyPI-Pakete, die dein Code importiert
-requests>=2.31
-py360convert==1.0.4
-PyYAML>=6.0
-numpy==1.26.4
-pillow>=9.5
-tqdm>=4.66
-scipy>=1.10
-matplotlib>=3.7

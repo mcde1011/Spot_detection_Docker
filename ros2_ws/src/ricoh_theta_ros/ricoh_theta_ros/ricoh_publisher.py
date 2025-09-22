@@ -12,6 +12,7 @@ from requests.adapters import HTTPAdapter
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+from rclpy.duration import Duration
 from sensor_msgs.msg import Image, CompressedImage
 
 from rclpy.executors import MultiThreadedExecutor
@@ -39,7 +40,7 @@ class RicohPublisher(Node):
         self.declare_parameter("timer_period", 1.0)                # s pro Bild
         self.declare_parameter("output_width", 1280)
         self.declare_parameter("output_height", 640)
-        self.declare_parameter("jpeg_quality", 65)
+        self.declare_parameter("jpeg_quality", 100)
         self.declare_parameter("publish_compressed", True)         # CompressedImage statt Image
 
         # Orientierung / Stitching-Qualität (nur für stitch_local)
@@ -230,8 +231,8 @@ class RicohPublisher(Node):
         t_start = time.time()
         file_url = None
         try:
-            timestamp = self.get_clock().now().to_msg()
-            self.timestamp.append(timestamp)
+            timestamp = self.get_clock().now() + Duration(seconds=1.5)
+            self.timestamp.append(timestamp.to_msg())
             take = self._post_execute({"name": "camera.takePicture"})
             data = take.json()
             cid = data.get("id")
@@ -245,6 +246,8 @@ class RicohPublisher(Node):
                 st = self._post_status(cid)
                 sdata = st.json()
                 if sdata.get("state") == "done":
+                    # timestamp = self.get_clock().now() #+ Duration(seconds=2)
+                    # self.timestamp.append(timestamp.to_msg())
                     file_url = sdata.get("results", {}).get("fileUrl")
                     break
                 time.sleep(0.3)

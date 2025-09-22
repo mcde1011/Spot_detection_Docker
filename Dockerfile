@@ -83,16 +83,11 @@ RUN source /opt/ros/humble/setup.bash && \
     colcon build --merge-install --symlink-install
 
 # Komfort
-RUN echo "source /opt/ros/${ROS_DISTRO}/setup.sh" >> /root/.bashrc && \
-    echo "source /ros2_ws/install/setup.bash" >> /root/.bashrc
-
-
-COPY ./ros2_ws/start_camera.sh ./launch/start_camera.sh
-RUN chmod +x ./launch/start_camera.sh
+# RUN echo "source /opt/ros/${ROS_DISTRO}/setup.sh" >> /root/.bashrc && \
+#     echo "source /ros2_ws/install/setup.bash" >> /root/.bashrc
 
 ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 ENV ROS_DOMAIN_ID=33
 
-CMD ["bash", "./launch/start_camera.sh"]
 
 
