@@ -4,34 +4,34 @@ objects:
   position:
   - 9.673480202046036
   - 4.173079431148443
-  - 1.1317455876166425
+  - 0.05
 - id: fire_extinguisher_001
   object_type: fire_extinguisher
   position:
   - 6.57506643354561
   - 9.06249521545342
-  - 1.1267222426078014
+  - 0.05
 - id: fire_extinguisher_002
   object_type: fire_extinguisher
   position:
-  - 6.617444204407708
-  - 3.8323386787720577
-  - 1.3004851410583562
-- id: emergency_exit_sign_003
-  object_type: emergency_exit_sign
-  position:
-  - -4.542100092157953
-  - -2.648858370846452
-  - 1.2392495850979768
-- id: fire_extinguisher_005
+  - 6.5422017017666185
+  - 3.5132767120948674
+  - 0.05
+- id: fire_extinguisher_003
   object_type: fire_extinguisher
   position:
-  - -5.269773260983718
-  - 8.822834721587498
-  - 1.2627896899385036
+  - -6.0035568259345755
+  - 3.235229030316856
+  - 0.05
 - id: fire_extinguisher_004
   object_type: fire_extinguisher
   position:
-  - -5.868268627565762
-  - 3.5946711955197697
-  - 1.1962589818776548
+  - -5.718227589618638
+  - 9.280666664874818
+  - 0.05
+- id: emergency_exit_sign_002
+  object_type: emergency_exit_sign
+  position:
+  - -4.701387662856014
+  - -1.920584258251693
+  - 0.05

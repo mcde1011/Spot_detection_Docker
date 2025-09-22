@@ -167,22 +167,20 @@ class TransformToMapNode(Node):
                     for saved_pt in saved_pts)
 
             if skip:
-                print("SKIPPE PUNKT, WEIL ÜBERSCHNEIDUNG IN EINEM BILD", flush=True)
                 updated = False
                 # Wenn du hier GAR NICHTS mehr updaten willst, kannst du auch:
                 # break
                 continue
             else:
-                # print("Überschreibe PT", old_pos, new_pos, flush=True)
+                print("Aktualisiere Eintrag",flush=True)
                 obj['position'] = new_pos.tolist()
                 updated = True
                 object_id = obj['id']
                 break  # wichtig: äußere Schleife verlassen
 
-        print("UPDATED:", updated, flush=True)
 
         if not updated:
-            print("ERZEUGE NEUEN PUNKT", flush=True)
+            print("Neuer Eintrag",flush=True)
             object_id = self.generate_next_id(obj_class)
             new_object = {
                 'object_type': obj_class,
@@ -230,7 +228,7 @@ class TransformToMapNode(Node):
             point_stamped.header.frame_id = "map"
             point_stamped.point.x = pos[0]
             point_stamped.point.y = pos[1]
-            point_stamped.point.z = pos[2]
+            point_stamped.point.z = 0.05
             
             marker = createMarker(obj_class, obj_id, "map", point_stamped)
             marker.lifetime = rclpy.duration.Duration(seconds=0).to_msg()
@@ -377,6 +375,7 @@ class TransformToMapNode(Node):
     ####################################################################
 
     def drawObjInMap(self, label, detections_arr, img):
+        print("OBJEKT ERHALTEN",flush=True)
         self.marker_array.markers.clear()
         pt_camera_frame = PointStamped()
         pt_base_link = PointStamped()
@@ -385,7 +384,6 @@ class TransformToMapNode(Node):
         obj_id = ""
         i = 0
         saved_pts = []
-        print("ANZ OBJ: ", len(detections_arr.detections), flush=True)
         for detection in detections_arr.detections:
             if not detection.results:
                 self.get_logger().warn("Detection without results – skipping")
@@ -413,11 +411,11 @@ class TransformToMapNode(Node):
                 )
                 return False
             else:
-                print("Loop NR.", i, flush=True)
+                pt_map.point.z = 0.05
+                print("Füge zu Yaml hinzu",flush=True)
                 obj_id = self.addObjToYaml(pt_map, obj_class, saved_pts)
                 saved_pts.append(pt_map)
                 # if saved_to_yaml:
-                #     print("SPEICHERE BILD", flush=True)
                 self.saveDetectionImg(obj_id, img)
                 i +=1
 
@@ -491,7 +489,7 @@ class TransformToMapNode(Node):
         pt = Point()
         pt.x = np.cos(angle_in_image) * dist_approximation
         pt.y = np.sin(angle_in_image) * dist_approximation
-        pt.z = 0.0
+        pt.z = 0.05
 
         if label == "up" or label == "down":
             buffer_x = pt.x
@@ -597,7 +595,8 @@ def calcDistanceVerticalCam(obj_class, bbox):
     """Distance approximation with symmetrical sigmoidal"""
     if obj_class == "emergency_exit_sign":
         # symmetrical sigmoidal
-        dist_approximation = 877712.8 + (-877710.34/(1+(bbox.center.position.y/986432.3)**1.494542))
+        # dist_approximation = 877712.8 + (-877710.34/(1+(bbox.center.position.y/986432.3)**1.494542))
+        dist_approximation = 1046540 + (-1046537.5/(1+(bbox.center.position.y/979626)**1.498072))
     elif obj_class == "fire_extinguisher":
         # symmertrical sogmoidal
         dist_approximation = 0.1385566 + (2088723.861/(1+((bbox.size_y/0.0008264511) ** 1.174847)))
@@ -643,7 +642,7 @@ def createMarker(obj_class, obj_id, frame_id, point_in_map):
             p = Point()
             p.x = point_in_map.point.x + radius * np.cos(angle)
             p.y = point_in_map.point.y + radius * np.sin(angle)
-            p.z = 0.0
+            p.z = 0.05
             marker.points.append(p)
 
     elif obj_class == "emergency_exit_sign":
@@ -652,7 +651,7 @@ def createMarker(obj_class, obj_id, frame_id, point_in_map):
         marker.pose.position = point_in_map.point
         marker.scale.x = 0.2
         marker.scale.y = 0.2
-        marker.scale.z = 0.01
+        marker.scale.z = 0.05
         marker.color.r = 0.0
         marker.color.g = 1.0
         marker.color.b = 0.0
@@ -671,19 +670,17 @@ def createTextMarker(obj_id, frame_id, point_in_map):
 
     marker.pose.position.x = point_in_map.point.x
     marker.pose.position.y = point_in_map.point.y
-    marker.pose.position.z = point_in_map.point.z + 0.05
+    marker.pose.position.z = point_in_map.point.z
 
     marker.scale.z = 0.15  # Fontsize in Meters
-    marker.color.r = 1.0
-    marker.color.g = 1.0
+    marker.color.r = 0.0
+    marker.color.g = 0.0
     marker.color.b = 1.0
     marker.color.a = 1.0
 
     marker.text = str(obj_id)
 
     return marker
-
-
 
 def main(args=None):
     rclpy.init(args=args)
