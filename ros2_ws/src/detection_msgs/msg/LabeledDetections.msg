@@ -1,0 +1,3 @@
+
+vision_msgs/Detection2DArray detections
+sensor_msgs/CompressedImage img

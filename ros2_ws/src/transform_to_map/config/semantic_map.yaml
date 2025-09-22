@@ -1,0 +1,13 @@
+objects:
+- id: fire_extinguisher_001
+  object_type: fire_extinguisher
+  position:
+  - 0.1197383295982346
+  - 11.971092300200828
+  - 6.367946762548
+- id: fire_extinguisher_002
+  object_type: fire_extinguisher
+  position:
+  - 1.8441036727673015
+  - 12.781992649754248
+  - 6.348223651273483
