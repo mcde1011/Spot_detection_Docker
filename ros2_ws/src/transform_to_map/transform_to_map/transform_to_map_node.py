@@ -172,7 +172,6 @@ class TransformToMapNode(Node):
                 # break
                 continue
             else:
-                print("Aktualisiere Eintrag",flush=True)
                 obj['position'] = new_pos.tolist()
                 updated = True
                 object_id = obj['id']
@@ -180,7 +179,6 @@ class TransformToMapNode(Node):
 
 
         if not updated:
-            print("Neuer Eintrag",flush=True)
             object_id = self.generate_next_id(obj_class)
             new_object = {
                 'object_type': obj_class,
@@ -225,17 +223,17 @@ class TransformToMapNode(Node):
             
             point_stamped = PointStamped()
             point_stamped.header.stamp = self.get_clock().now().to_msg()
-            point_stamped.header.frame_id = "map"
+            point_stamped.header.frame_id = "hkaspot/odom"
             point_stamped.point.x = pos[0]
             point_stamped.point.y = pos[1]
             point_stamped.point.z = 0.05
             
-            marker = createMarker(obj_class, obj_id, "map", point_stamped)
+            marker = createMarker(obj_class, obj_id, "hkaspot/odom", point_stamped)
             marker.lifetime = rclpy.duration.Duration(seconds=0).to_msg()
             self.marker_array.markers.append(marker)
 
-            text_marker = createTextMarker(obj_id, "map", point_stamped)
-            self.marker_array.markers.append(text_marker)
+            bg_marker, text_marker  = createTextWithRectBG(obj_id, "hkaspot/odom", point_stamped)
+            self.marker_array.markers.extend([bg_marker, text_marker])
 
         if self.marker_array.markers:
             self.marker_pub.publish(self.marker_array)
@@ -375,7 +373,6 @@ class TransformToMapNode(Node):
     ####################################################################
 
     def drawObjInMap(self, label, detections_arr, img):
-        print("OBJEKT ERHALTEN",flush=True)
         self.marker_array.markers.clear()
         pt_camera_frame = PointStamped()
         pt_base_link = PointStamped()
@@ -412,7 +409,6 @@ class TransformToMapNode(Node):
                 return False
             else:
                 pt_map.point.z = 0.05
-                print("Füge zu Yaml hinzu",flush=True)
                 obj_id = self.addObjToYaml(pt_map, obj_class, saved_pts)
                 saved_pts.append(pt_map)
                 # if saved_to_yaml:
@@ -642,7 +638,7 @@ def createMarker(obj_class, obj_id, frame_id, point_in_map):
             p = Point()
             p.x = point_in_map.point.x + radius * np.cos(angle)
             p.y = point_in_map.point.y + radius * np.sin(angle)
-            p.z = 0.05
+            p.z = 0.01
             marker.points.append(p)
 
     elif obj_class == "emergency_exit_sign":
@@ -651,7 +647,7 @@ def createMarker(obj_class, obj_id, frame_id, point_in_map):
         marker.pose.position = point_in_map.point
         marker.scale.x = 0.2
         marker.scale.y = 0.2
-        marker.scale.z = 0.05
+        marker.scale.z = 0.01
         marker.color.r = 0.0
         marker.color.g = 1.0
         marker.color.b = 0.0
@@ -659,28 +655,45 @@ def createMarker(obj_class, obj_id, frame_id, point_in_map):
 
     return marker
 
-def createTextMarker(obj_id, frame_id, point_in_map):
-    marker = Marker()
-    marker.header.frame_id = frame_id
-    marker.ns = "labels"
-    marker.id = hash("text_" + str(obj_id)) % (2**31 - 1)
+def createTextWithRectBG(obj_id, frame_id, point_in_map,
+                         font_size=0.15,
+                         text_rgba=(1.0, 1.0, 1.0, 1.0),
+                         bg_rgba=(0.0, 0.0, 0.0, 1.0),
+                         z_gap=0.003):
+    
+    text = Marker()
+    text.header.frame_id = frame_id
+    text.ns = "labels"
+    text.id = hash("text_" + str(obj_id)) % (2**31 - 1)
+    text.type = Marker.TEXT_VIEW_FACING
+    text.action = Marker.ADD
+    text.pose.position.x = point_in_map.point.x
+    text.pose.position.y = point_in_map.point.y
+    text.pose.position.z = point_in_map.point.z
+    text.scale.z = font_size
+    text.color.r, text.color.g, text.color.b, text.color.a = text_rgba
+    text.text = str(obj_id)
 
-    marker.type = Marker.TEXT_VIEW_FACING
-    marker.action = Marker.ADD
+    approx_char_w = 0.45 * font_size
+    w = approx_char_w * len(text.text)
+    h = 1.2 * font_size
 
-    marker.pose.position.x = point_in_map.point.x
-    marker.pose.position.y = point_in_map.point.y
-    marker.pose.position.z = point_in_map.point.z
-
-    marker.scale.z = 0.15  # Fontsize in Meters
-    marker.color.r = 0.0
-    marker.color.g = 0.0
-    marker.color.b = 1.0
-    marker.color.a = 1.0
-
-    marker.text = str(obj_id)
-
-    return marker
+    # text background for better visibility
+    bg = Marker()
+    bg.header.frame_id = frame_id
+    bg.ns = "label_bg"
+    bg.id = hash("bg_" + str(obj_id)) % (2**31 - 1)
+    bg.type = Marker.CUBE
+    bg.action = Marker.ADD
+    bg.pose.position.x = point_in_map.point.x
+    bg.pose.position.y = point_in_map.point.y
+    bg.pose.position.z = point_in_map.point.z - z_gap
+    bg.pose.orientation.w = 1.0
+    bg.scale.x = h
+    bg.scale.y = w 
+    bg.scale.z = 0.005 
+    bg.color.r, bg.color.g, bg.color.b, bg.color.a = bg_rgba
+    return bg, text
 
 def main(args=None):
     rclpy.init(args=args)
