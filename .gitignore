@@ -1,2 +1,3 @@
 ros2_ws/src/transform_to_map/config/semantic_map.yaml
 ros2_ws/src/transform_to_map/detection_images/
+ros2_ws/src/ricoh_theta_ros/camera_images/

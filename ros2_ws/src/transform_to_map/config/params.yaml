@@ -3,3 +3,4 @@ transform_to_map_node:
     camera_frame: 'camera_link'
     base_frame: 'hkaspot/base_link'
     position_tolerance: 1.5
+    semantic_map_pub_rate: 3    # in seconds

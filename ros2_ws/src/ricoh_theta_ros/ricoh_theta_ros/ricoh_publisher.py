@@ -21,6 +21,7 @@ import concurrent.futures
 from collections import deque
 
 from cv_bridge import CvBridge
+import os
 
 
 class RicohPublisher(Node):
@@ -50,8 +51,12 @@ class RicohPublisher(Node):
         self.declare_parameter("swap_halves", False)
 
         # Speicherung (optional)
-        self.declare_parameter("save_enabled", False)
+        self.declare_parameter("save_enabled", True)
         self.declare_parameter("save_dir", "./ricoh_theta_views")
+        self.declare_parameter("path_to_images", "")
+        self.save_base_dir = self.get_parameter("path_to_images").get_parameter_value().string_value
+        if not self.save_base_dir:
+            self.get_logger().error("No path_to_images parameter provided")
 
         # Parameter lesen
         self.CAMERA_IP = self.get_parameter("camera_ip").get_parameter_value().string_value
@@ -73,8 +78,6 @@ class RicohPublisher(Node):
         self.swap_halves = bool(self.get_parameter("swap_halves").value)
 
         self.save_enabled = bool(self.get_parameter("save_enabled").value)
-        self.save_base_dir = Path(self.get_parameter("save_dir").get_parameter_value().string_value)
-        self.save_base_dir.mkdir(parents=True, exist_ok=True)
 
         # Auth / HTTP Session mit Timeouts
         self.auth = HTTPDigestAuth(self.USERNAME, self.PASSWORD)
@@ -324,19 +327,33 @@ class RicohPublisher(Node):
         if self.save_enabled:
             try:
                 now = datetime.now()
-                day_dir = self.save_base_dir / now.strftime("%Y-%m-%d")
-                day_dir.mkdir(parents=True, exist_ok=True)
                 ts_str = now.strftime("%Y-%m-%d_%H-%M-%S.%f")
+
+                # Datei-Endung abhängig von publish_compressed
+                ext = ".jpg" if self.publish_compressed else ".png"
+
+                # Dateiname zusammensetzen
+                filename = f"{ts_str}_{mode}{ext}"
+
+                # Pfad aus Basisverzeichnis und Dateiname bauen
+                filepath = os.path.join(self.save_base_dir, filename)
+
+                # Bild speichern mit den jeweiligen Parametern
                 if self.publish_compressed:
-                    cv2.imwrite(
-                        str(day_dir / f"{ts_str}_{mode}.jpg"),
+                    success = cv2.imwrite(
+                        filepath,
                         out_img,
                         [int(cv2.IMWRITE_JPEG_QUALITY), self.jpeg_quality],
                     )
                 else:
-                    cv2.imwrite(str(day_dir / f"{ts_str}_{mode}.png"), out_img)
+                    success = cv2.imwrite(filepath, out_img)
+
+                if not success:
+                    raise RuntimeError(f"Couldn't save {filepath}")
+
             except Exception as e:
-                self.get_logger().warning(f"Speichern fehlgeschlagen: {e}")
+                self.get_logger().warning(f"Error saving detection image: {e}")
+                
 
         # 6) Datei auf Kamera löschen (seriell im control_pool)
         try:

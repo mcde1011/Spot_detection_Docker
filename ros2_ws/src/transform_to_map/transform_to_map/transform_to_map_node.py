@@ -15,8 +15,8 @@ import tf2_geometry_msgs
 from geometry_msgs.msg import PointStamped, Point
 from tf2_geometry_msgs import do_transform_point
 
-from interactive_markers.interactive_marker_server import InteractiveMarkerServer
-from visualization_msgs.msg import InteractiveMarker, InteractiveMarkerControl, InteractiveMarkerFeedback
+# from interactive_markers.interactive_marker_server import InteractiveMarkerServer
+# from visualization_msgs.msg import InteractiveMarker, InteractiveMarkerControl, InteractiveMarkerFeedback
 
 from detection_msgs.msg import LabeledDetections
 
@@ -30,20 +30,6 @@ class TransformToMapNode(Node):
         self.marker = Marker()
         self.semantic_data = {}
         self.bridge = CvBridge()
-        
-        # get path to semantic map and load it 
-        self.declare_parameter("semantic_map_file", "")
-        self.smap_filename = self.get_parameter("semantic_map_file").get_parameter_value().string_value
-        if not self.smap_filename:
-            self.get_logger().error("No semantic_map_file parameter provided")
-        self.load_semantic_map()
-        self.timer = self.create_timer(3.0, self.publish_semantic_map)
-
-        # get path to stored detection images
-        self.declare_parameter("path_to_images", "")
-        self.path_to_annotated_imgs = self.get_parameter("path_to_images").get_parameter_value().string_value
-        if not self.path_to_annotated_imgs:
-            self.get_logger().error("No path_to_images parameter provided")
 
         # read params.yaml
         self.declare_parameter("camera_frame", "camera_link")
@@ -52,8 +38,24 @@ class TransformToMapNode(Node):
         self.base_frame = self.get_parameter("base_frame").get_parameter_value().string_value
         self.declare_parameter("position_tolerance", 0.4)
         self.position_tolerance = self.get_parameter("position_tolerance").get_parameter_value().double_value
+        self.declare_parameter("semantic_map_pub_rate", 3)
+        self.semantic_map_pub_rate = self.get_parameter("semantic_map_pub_rate").get_parameter_value().double_value
 
-        self.marker_pub = self.create_publisher(MarkerArray, 'utils_rviz_visualization', 10)
+        # get path to semantic map and load it 
+        self.declare_parameter("semantic_map_file", "")
+        self.smap_filename = self.get_parameter("semantic_map_file").get_parameter_value().string_value
+        if not self.smap_filename:
+            self.get_logger().error("No semantic_map_file parameter provided")
+        self.load_semantic_map()
+        self.timer = self.create_timer(self.semantic_map_pub_rate, self.publish_semantic_map)
+
+        # get path to stored detection images
+        self.declare_parameter("path_to_images", "")
+        self.path_to_annotated_imgs = self.get_parameter("path_to_images").get_parameter_value().string_value
+        if not self.path_to_annotated_imgs:
+            self.get_logger().error("No path_to_images parameter provided")
+
+        self.marker_pub = self.create_publisher(MarkerArray, 'semantic_map_visualization', 10)
         self.detection_img_rviz_pub = self.create_publisher(Image, 'detection_image', 10)
         
         # self.im_server = InteractiveMarkerServer(self, "object_markers")  # eindeutiger Namespace
@@ -250,39 +252,31 @@ class TransformToMapNode(Node):
     ###               Interactive Markers in RViz                    ###
     ####################################################################
 
-    def on_im_feedback(self, feedback: InteractiveMarkerFeedback):
-        if feedback.event_type in (
-            InteractiveMarkerFeedback.BUTTON_CLICK,
-            InteractiveMarkerFeedback.MOUSE_UP,
-        ):
-            obj_id = feedback.marker_name
-            self.on_object_clicked(obj_id)
+    # def on_im_feedback(self, feedback: InteractiveMarkerFeedback):
+    #     if feedback.event_type in (
+    #         InteractiveMarkerFeedback.BUTTON_CLICK,
+    #         InteractiveMarkerFeedback.MOUSE_UP,
+    #     ):
+    #         obj_id = feedback.marker_name
+    #         self.on_object_clicked(obj_id)
 
-    def on_object_clicked(self, obj_id: str):
-        img = self.load_image_as_rosmsg(obj_id)
-        if img is not None:
-            self.detection_img_rviz_pub.publish(img)
-            self.get_logger().info(f"Clicked on {obj_id}")
-        else:
-            self.get_logger().warn(f"Could not load image for {obj_id}")
+    # def on_object_clicked(self, obj_id: str):
+    #     img = self.load_image_as_rosmsg(obj_id)
+    #     if img is not None:
+    #         self.detection_img_rviz_pub.publish(img)
+    #         self.get_logger().info(f"Clicked on {obj_id}")
+    #     else:
+    #         self.get_logger().warn(f"Could not load image for {obj_id}")
 
     ####################################################################
     ###               save and load detection image                  ###
     ####################################################################
-    def saveDetectionImg(self, obj_id, ros_img):
+    def saveDetectionImg(self, obj_id, cv_img):
         """Save ROS Image message (compressed or uncompressed) as OpenCV image file"""
-        try:
-            # Check if it's a CompressedImage
-            if hasattr(ros_img, 'format'):  # CompressedImage has 'format' attribute
-                # Convert CompressedImage to OpenCV format
-                cv_image = self.bridge.compressed_imgmsg_to_cv2(ros_img, "bgr8")
-            else:
-                # Convert regular Image message to OpenCV format
-                cv_image = self.bridge.imgmsg_to_cv2(ros_img, "bgr8")
-            
+        try:            
             # Add filename to path (with image extension)
             filepath = os.path.join(self.path_to_annotated_imgs, f"{obj_id}.jpg")
-            success = cv2.imwrite(filepath, cv_image)
+            success = cv2.imwrite(filepath, cv_img)
             if not success:
                 raise RuntimeError(f"Couldn't save {filepath}")
                 
@@ -372,7 +366,14 @@ class TransformToMapNode(Node):
     ###                     DRAW OBJECT IN MAP                       ###
     ####################################################################
 
-    def drawObjInMap(self, label, detections_arr, img):
+    def drawObjInMap(self, label, detections_arr, ros_img):
+        # Check if it's a CompressedImage
+        if hasattr(ros_img, 'format'):  # CompressedImage has 'format' attribute
+            # Convert CompressedImage to OpenCV format
+            cv_image = self.bridge.compressed_imgmsg_to_cv2(ros_img, "bgr8")
+        else:
+            # Convert regular Image message to OpenCV format
+            cv_image = self.bridge.imgmsg_to_cv2(ros_img, "bgr8")
         self.marker_array.markers.clear()
         pt_camera_frame = PointStamped()
         pt_base_link = PointStamped()
@@ -392,7 +393,7 @@ class TransformToMapNode(Node):
             if label != "up" and label != "down":
                 dist_approximation = calcDistanceVerticalCam(obj_class, bbox)
                 # calculate angle to object by using camera pixels (FoV = 90°, 800x800 Pixel)
-                angle_in_image = -(0.1125 * (bbox.center.position.x - 400) * np.pi) / 180
+                angle_in_image = -(90/(cv_image.shape[1]) * (bbox.center.position.x - cv_image.shape[1]/2) * np.pi) / 180
             else:
                 dist_approximation, angle_in_image = calcDistanceHorizontalCam(bbox)
 
@@ -412,7 +413,7 @@ class TransformToMapNode(Node):
                 obj_id = self.addObjToYaml(pt_map, obj_class, saved_pts)
                 saved_pts.append(pt_map)
                 # if saved_to_yaml:
-                self.saveDetectionImg(obj_id, img)
+                self.saveDetectionImg(obj_id, cv_image)
                 i +=1
 
                 # self.marker = createMarker(obj_class, obj_id, self.base_frame, pt_base_link)      # comment in to visualize the marker directly in RViz

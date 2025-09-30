@@ -1,37 +1,13 @@
 objects:
-- id: emergency_exit_sign_001
-  object_type: emergency_exit_sign
-  position:
-  - 9.673480202046036
-  - 4.173079431148443
-  - 0.05
 - id: fire_extinguisher_001
   object_type: fire_extinguisher
   position:
-  - 6.57506643354561
-  - 9.06249521545342
+  - -6.065344647174433
+  - 3.545045335923163
   - 0.05
-- id: fire_extinguisher_002
-  object_type: fire_extinguisher
-  position:
-  - 6.5422017017666185
-  - 3.5132767120948674
-  - 0.05
-- id: fire_extinguisher_003
-  object_type: fire_extinguisher
-  position:
-  - -6.0035568259345755
-  - 3.235229030316856
-  - 0.05
-- id: fire_extinguisher_004
-  object_type: fire_extinguisher
-  position:
-  - -5.718227589618638
-  - 9.280666664874818
-  - 0.05
-- id: emergency_exit_sign_002
+- id: emergency_exit_sign_001
   object_type: emergency_exit_sign
   position:
-  - -4.701387662856014
-  - -1.920584258251693
+  - -4.6431440171491305
+  - -2.3734162238129253
   - 0.05

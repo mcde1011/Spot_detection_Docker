@@ -16,6 +16,7 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ./ros2_ws/src/transform_to_map/config:/ros2_ws/src/transform_to_map/config:rw
       - ./ros2_ws/src/transform_to_map/detection_images:/ros2_ws/install/share/transform_to_map/detection_images:rw
+      - ./ros2_ws/src/ricoh_theta_ros/camera_images:/ros2_ws/install/share/ricoh_theta_ros/camera_images:rw
     deploy:
       resources:
         reservations:

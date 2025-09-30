@@ -4,6 +4,8 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch.substitutions import PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
+from ament_index_python.packages import get_package_share_directory
+import os
 
 # Standardpfad: <share>/ricoh_theta_ros/resource/best.pt
 default_model = PathJoinSubstitution([
@@ -31,6 +33,8 @@ def generate_launch_description():
     flip_vertical   = LaunchConfiguration('flip_vertical')
     yaw_offset_deg  = LaunchConfiguration('yaw_offset_deg')
     blend_width_deg = LaunchConfiguration('blend_width_deg')
+    package_dir = get_package_share_directory('ricoh_theta_ros')
+    path_to_images = os.path.join(package_dir, 'camera_images')
 
     return LaunchDescription([
         # YOLO
@@ -66,6 +70,8 @@ def generate_launch_description():
                 'flip_vertical': flip_vertical,
                 'yaw_offset_deg': yaw_offset_deg,
                 'blend_width_deg': blend_width_deg,
+                "path_to_images": path_to_images,
+
             }],
         ),
 
