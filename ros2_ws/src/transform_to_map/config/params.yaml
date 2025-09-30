@@ -2,5 +2,9 @@ transform_to_map_node:
   ros__parameters:
     camera_frame: 'camera_link'
     base_frame: 'hkaspot/base_link'
+    transform:
+      translation: [-0.117, 0.0, 0.111]   # [x, y, z]
+      euler: [0.0, 0.0, 0.0]              # [roll, pitch, yaw]
+
     position_tolerance: 1.5
     semantic_map_pub_rate: 3    # in seconds
