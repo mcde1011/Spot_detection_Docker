@@ -27,9 +27,9 @@ class StaticTFPublisher(Node):
         )
 
         self.broadcaster = StaticTransformBroadcaster(self)
-        self.publish_static_transform([float(q[0]), float(q[1]), float(q[2]), float(q[3])])
+        self.publishStaticTransform([float(q[0]), float(q[1]), float(q[2]), float(q[3])])
 
-    def publish_static_transform(self, quat):
+    def publishStaticTransform(self, quat):
         t = TransformStamped()
         t.header.stamp = rclpy.time.Time().to_msg()
         t.header.frame_id = self.base_frame

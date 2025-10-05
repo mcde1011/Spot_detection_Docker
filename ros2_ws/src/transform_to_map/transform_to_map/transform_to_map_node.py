@@ -46,8 +46,8 @@ class TransformToMapNode(Node):
         self.smap_filename = self.get_parameter("semantic_map_file").get_parameter_value().string_value
         if not self.smap_filename:
             self.get_logger().error("No semantic_map_file parameter provided")
-        self.load_semantic_map()
-        self.timer = self.create_timer(self.semantic_map_pub_rate, self.publish_semantic_map)
+        self.loadSemanticMap()
+        self.timer = self.create_timer(self.semantic_map_pub_rate, self.publishSemanticMap)
 
         # get path to stored detection images
         self.declare_parameter("path_to_images", "")
@@ -65,41 +65,41 @@ class TransformToMapNode(Node):
         self.sub_front = self.create_subscription(
             LabeledDetections,
             '/detections/front/labeled',
-            self.front_cb,
+            self.frontCb,
             10
         )
 
         self.sub_front = self.create_subscription(
             LabeledDetections,
             '/detections/back/labeled',
-            self.back_cb,
+            self.backCb,
             10
         )
 
         self.sub_front = self.create_subscription(
             LabeledDetections,
             '/detections/left/labeled',
-            self.left_cb,
+            self.leftCb,
             10
         )
 
         self.sub_front = self.create_subscription(
             LabeledDetections,
             '/detections/right/labeled',
-            self.right_cb,
+            self.rightCb,
             10
         )
         self.sub_front = self.create_subscription(
             LabeledDetections,
             '/detections/up/labeled',
-            self.up_cb,
+            self.upCb,
             10
         )
 
         self.sub_front = self.create_subscription(
             LabeledDetections,
             '/detections/down/labeled',
-            self.down_cb,
+            self.downCb,
             10
         )
 
@@ -107,7 +107,7 @@ class TransformToMapNode(Node):
     ###                     SEMANTIC MAP                             ###
     ####################################################################
 
-    def load_semantic_map(self):
+    def loadSemanticMap(self):
         """load YAML-file with graceful handling for empty files"""
         try:
             if not os.path.exists(self.smap_filename):
@@ -181,7 +181,7 @@ class TransformToMapNode(Node):
 
 
         if not updated:
-            object_id = self.generate_next_id(obj_class)
+            object_id = self.generateNextId(obj_class)
             new_object = {
                 'object_type': obj_class,
                 'id': object_id,
@@ -192,14 +192,14 @@ class TransformToMapNode(Node):
 
         return object_id
 
-    def generate_next_id(self, obj_class):
+    def generateNextId(self, obj_class):
         count = len([obj for obj in self.semantic_data.get('objects', []) if obj.get('object_type') == obj_class])
         next_number = count + 1
         
         # Format: object_type_XXX
         return f"{obj_class}_{next_number:03d}"
 
-    def save_semantic_map(self):
+    def saveSemanticMap(self):
         try:
             with open(self.smap_filename, 'w', encoding='utf-8') as f:
                 yaml.dump(self.semantic_data, f, default_flow_style=False, allow_unicode=True)
@@ -209,7 +209,7 @@ class TransformToMapNode(Node):
             self.get_logger().error(f"Could not save semantic map: {e}")
             return False
         
-    def publish_semantic_map(self):
+    def publishSemanticMap(self):
         """Visualize all objects from YAML as markers in RViz"""
         
         if 'objects' not in self.semantic_data:
@@ -261,7 +261,7 @@ class TransformToMapNode(Node):
     #         self.on_object_clicked(obj_id)
 
     # def on_object_clicked(self, obj_id: str):
-    #     img = self.load_image_as_rosmsg(obj_id)
+    #     img = self.loadImageAsRosmsg(obj_id)
     #     if img is not None:
     #         self.detection_img_rviz_pub.publish(img)
     #         self.get_logger().info(f"Clicked on {obj_id}")
@@ -286,7 +286,7 @@ class TransformToMapNode(Node):
             self.get_logger().error(f"Error saving detection image: {e}")
             return None
     
-    def load_image_as_rosmsg(self, obj_id):
+    def loadImageAsRosmsg(self, obj_id):
         """Load saved image and convert to ROS Image message"""
         try:
             # Add filename with extension to path
@@ -313,7 +313,7 @@ class TransformToMapNode(Node):
     ###                       CALLBACKS                              ###
     ####################################################################
 
-    def front_cb(self, msg):
+    def frontCb(self, msg):
         label = "front"
         obj_id = self.drawObjInMap(label, msg.detections, msg.img)
         # if obj_id:
@@ -322,7 +322,7 @@ class TransformToMapNode(Node):
         # if not success:
         #     self.get_logger().error('ERROR WHILE DRAWING OBJECTS FROM FRONT CAMERA')
 
-    def back_cb(self, msg):
+    def backCb(self, msg):
         label = "back"
         obj_id = self.drawObjInMap(label, msg.detections, msg.img)
         # if obj_id:
@@ -330,7 +330,7 @@ class TransformToMapNode(Node):
         # if not success:
             # self.get_logger().error('ERROR WHILE DRAWING OBJECTS FROM BACK CAMERA')
 
-    def left_cb(self, msg):
+    def leftCb(self, msg):
         label = "left"
         obj_id = self.drawObjInMap(label, msg.detections, msg.img)
         # if obj_id:
@@ -338,7 +338,7 @@ class TransformToMapNode(Node):
         # if not success:
             # self.get_logger().error('ERROR WHILE DRAWING OBJECTS FROM LEFT CAMERA')
     
-    def right_cb(self, msg):
+    def rightCb(self, msg):
         label = "right"
         obj_id = self.drawObjInMap(label, msg.detections, msg.img)
         # if obj_id:
@@ -346,7 +346,7 @@ class TransformToMapNode(Node):
         # if not success:
             # self.get_logger().error('ERROR WHILE DRAWING OBJECTS FROM RIGHT CAMERA')
 
-    def up_cb(self, msg):
+    def upCb(self, msg):
         label = "up"
         obj_id = self.drawObjInMap(label, msg.detections, msg.img)
         # if obj_id:
@@ -354,7 +354,7 @@ class TransformToMapNode(Node):
         # if not success:
             # self.get_logger().error('ERROR WHILE DRAWING OBJECTS FROM UP CAMERA')
         
-    def down_cb(self, msg):
+    def downCb(self, msg):
         label = "down"
         obj_id = self.drawObjInMap(label, msg.detections, msg.img)
         # if obj_id:
@@ -419,7 +419,7 @@ class TransformToMapNode(Node):
                 # self.marker = createMarker(obj_class, obj_id, self.base_frame, pt_base_link)      # comment in to visualize the marker directly in RViz
                 # self.marker.lifetime = rclpy.duration.Duration(seconds=1).to_msg()
                 # self.marker_array.markers.append(self.marker)
-        self.save_semantic_map()
+        self.saveSemanticMap()
 
     def transformToBaseFrame(self, pt_camera_frame):
         """
