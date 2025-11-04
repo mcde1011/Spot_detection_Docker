@@ -21,17 +21,17 @@ from vision_msgs.msg import (
 from cv_bridge import CvBridge
 import py360convert
 
-from detection_msgs.msg import LabeledDetections # Custom-Message (Paket detection_msgs, Msg LabeledDetections)
+from detection_msgs.msg import LabeledDetections  # Custom message (package detection_msgs, msg LabeledDetections)
 
 # Ultralytics YOLO
 try:
     from ultralytics import YOLO
 except ImportError as e:
-    raise RuntimeError("Ultralytics nicht installiert: pip install ultralytics") from e
+    raise RuntimeError("Ultralytics not installed: pip install ultralytics") from e
 
 
 def _default_model_path() -> str:
-    """Share-Verzeichnis bevorzugen, sonst Source-Fallback."""
+    """Prefer share directory, otherwise fall back to source."""
     try:
         from ament_index_python.packages import get_package_share_directory
         share = get_package_share_directory('ricoh_theta_ros')
@@ -45,30 +45,30 @@ def _default_model_path() -> str:
 
 class YoloDetector(Node):
     """
-    Abonniert EIN Topic (/ricoh_theta/image), erzeugt sechs Views und publiziert pro View:
-      /detections/<view>                  (vision_msgs/Detection2DArray, immer)
-      /detections/<view>/annotated[... ]  (Image/CompressedImage, nur bei >=1 Box)
-      /detections/<view>/labeled          (detection_msgs/LabeledDetections, immer)
+    Subscribes to ONE topic (/ricoh_theta/image), generates six views, and publishes per view:
+      /detections/<view>                  (vision_msgs/Detection2DArray, always)
+      /detections/<view>/annotated[...]   (Image/CompressedImage, only if >=1 box)
+      /detections/<view>/labeled          (detection_msgs/LabeledDetections, always)
     """
 
     def __init__(self):
         super().__init__("yolo_detector")
 
-        # Parameter
+        # Parameters
         self.declare_parameter("model_path", _default_model_path())
         self.declare_parameter("input_topic", "/ricoh_theta/image/compressed")
         self.declare_parameter("output_namespace", "/detections")
-        self.declare_parameter("publish_annotated", True)  # nur bei >=1 Box
+        self.declare_parameter("publish_annotated", True)  # only if >=1 box
         self.declare_parameter("conf", 0.6)
         self.declare_parameter("iou", 0.45)
         self.declare_parameter("imgsz", 640)
         self.declare_parameter("device", "auto")     # "cpu", "0", "cuda:0", "auto"
-        self.declare_parameter("device_index", -1)   # erlaubt int-Override
-        self.declare_parameter("half", True)         # FP16 auf CUDA
+        self.declare_parameter("device_index", -1)   # allows int override
+        self.declare_parameter("half", True)         # FP16 on CUDA
         self.declare_parameter("publish_annotated_compressed", True)
         self.declare_parameter("annotated_jpeg_quality", 70)
 
-        # Parameter lesen
+        # Read parameters
         model_path = self.get_parameter("model_path").get_parameter_value().string_value
         input_topic: str = self.get_parameter("input_topic").get_parameter_value().string_value
         self.output_ns: str = self.get_parameter("output_namespace").get_parameter_value().string_value
@@ -82,26 +82,26 @@ class YoloDetector(Node):
         self.publish_annotated_compressed = bool(self.get_parameter("publish_annotated_compressed").value)
         self.annotated_jpeg_quality = int(self.get_parameter("annotated_jpeg_quality").value)
 
-        # Gerät ermitteln
+        # Determine device
         self.device = self._resolve_device(device_param, device_index)
 
-        self.get_logger().info(f"Lade YOLO Modell: {model_path} auf {self.device}")
+        self.get_logger().info(f"Loading YOLO model: {model_path} on {self.device}")
         self.model = YOLO(model_path)
 
-        # Modell explizit verschieben (optional, Ultralytics macht es oft selbst)
+        # Explicitly move model (optional, Ultralytics often does this automatically)
         try:
             if self.device != "cpu":
-                self.model.to(self.device)  # "0" oder "cuda:0"
+                self.model.to(self.device)  # "0" or "cuda:0"
         except Exception as e:
-            self.get_logger().warn(f"Konnte Modell nicht explizit verschieben ({e}); Ultralytics verwaltet das ggf. intern.")
+            self.get_logger().warn(f"Could not explicitly move model ({e}); Ultralytics may handle this internally.")
 
-        # Fusing (falls unterstützt)
+        # Fusing (if supported)
         try:
             self.model.fuse()
         except Exception:
             pass
 
-        # QoS für Kameradaten
+        # QoS for camera data
         qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST,
@@ -110,7 +110,7 @@ class YoloDetector(Node):
 
         self.bridge = CvBridge()
 
-        # Publisher pro View vorbereiten
+        # Prepare publishers per view
         self.views_spec: Dict[str, Tuple[int, int]] = {
             "front": (0, 0),
             "right": (90, 0),
@@ -124,7 +124,7 @@ class YoloDetector(Node):
 
         self.pub_dets: Dict[str, rclpy.publisher.Publisher] = {}
         self.pub_imgs: Dict[str, rclpy.publisher.Publisher] = {}
-        # NEU: Publisher für gebündelte Custom-Message
+        # NEW: Publisher for combined custom message
         self.pub_labeled: Dict[str, rclpy.publisher.Publisher] = {}
 
         for view in self.views_spec.keys():
@@ -134,18 +134,18 @@ class YoloDetector(Node):
 
             self.pub_dets[view] = self.create_publisher(Detection2DArray, det_topic, 10)
 
-            # optional: klassisches annotiertes Bild-Topic
+            # optional: classic annotated image topic
             if self.publish_annotated:
                 if self.publish_annotated_compressed:
-                    # ROS-Konvention: /compressed-Suffix
+                    # ROS convention: /compressed suffix
                     self.pub_imgs[view] = self.create_publisher(CompressedImage, ann_topic + "/compressed", 10)
                 else:
                     self.pub_imgs[view] = self.create_publisher(Image, ann_topic, 10)
 
-            # NEU: immer publizierbares gebündeltes Topic
+            # NEW: always publishable combined topic
             self.pub_labeled[view] = self.create_publisher(LabeledDetections, labeled_topic, 10)
 
-        # Klassenbezeichnungen
+        # Class labels
         self.class_names = {}
         try:
             if hasattr(self.model, "names"):
@@ -153,9 +153,9 @@ class YoloDetector(Node):
         except Exception:
             pass
 
-        # EIN Subscriber auf das Equirectangular-Topic
+        # ONE subscriber for the equirectangular topic
         self.sub_image = self.create_subscription(CompressedImage, input_topic, self.cb_image, qos)
-        self.get_logger().info(f"Abonniere: {input_topic}")
+        self.get_logger().info(f"Subscribing to: {input_topic}")
 
     def _resolve_device(self, dev_str: str, dev_idx: int) -> str:
         if dev_idx >= 0:
@@ -166,24 +166,24 @@ class YoloDetector(Node):
         return dv
 
     def cb_image(self, msg: CompressedImage):
-        """Haupt-Callback: Equirectangular rein, 6 Views raus, dann YOLO pro View."""
+        """Main callback: equirectangular in, 6 views out, then YOLO per view."""
         try:
             equirect = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding="bgr8")
         except Exception as e:
-            self.get_logger().warn(f"cv_bridge Fehler (input): {e}")
+            self.get_logger().warn(f"cv_bridge error (input): {e}")
             return
-        # self.get_logger().info(f"Image erhalten")
-        # 6 Perspektiven generieren
+        # self.get_logger().info(f"Image received")
+        # Generate 6 perspectives
         views = self.generate_views(equirect)
-        # Pro View Inferenz + Publish
+        # Process and publish per view
         for view_name, frame in views.items():
             try:
                 self._process_view(view_name, frame, msg.header)
             except Exception as e:
-                self.get_logger().error(f"Fehler bei Verarbeitung View '{view_name}': {e}")
+                self.get_logger().error(f"Error processing view '{view_name}': {e}")
 
     def generate_views(self, img: np.ndarray) -> Dict[str, np.ndarray]:
-        """Erzeuge perspektivische Projektionen aus Equirectangular."""
+        """Generate perspective projections from equirectangular image."""
         views = {}
         for name, (yaw, pitch) in self.views_spec.items():
             persp_img = py360convert.e2p(
@@ -197,11 +197,11 @@ class YoloDetector(Node):
         return views
 
     def _process_view(self, view_name: str, frame: np.ndarray, header):
-        """YOLO ausführen, Detections und Bilder publizieren (klassisch & gebündelt)."""
+        """Run YOLO, publish detections and images (classic & combined)."""
 
         t0 = time.time()
 
-        # Inferenz
+        # Inference
         half_flag = self.use_half and (self.device != "cpu")
         try:
             results = self.model.predict(
@@ -214,10 +214,8 @@ class YoloDetector(Node):
                 half=half_flag
             )
         except Exception as e:
-            self.get_logger().error(f"YOLO predict Fehler ({view_name}): {e}")
+            self.get_logger().error(f"YOLO predict error ({view_name}): {e}")
             return
-
-        # self.get_logger().info(f"YOLO Ergebnis: {results}")
 
         det_array = Detection2DArray()
         det_array.header = header
@@ -244,7 +242,7 @@ class YoloDetector(Node):
                 w  = float(max(0.0, x2 - x1))
                 h  = float(max(0.0, y2 - y1))
 
-                # BoundingBox2D robust befüllen
+                # Fill BoundingBox2D robustly
                 bbox = BoundingBox2D()
                 CenterCls = type(bbox.center)
                 center = CenterCls()
@@ -269,30 +267,30 @@ class YoloDetector(Node):
 
                 det_array.detections.append(det)
 
-                # Optionales Zeichnen
+                # Optional drawing
                 if annotated is not None:
                     label = self.class_names.get(cls, str(cls))
                     self.get_logger().info(
-                    f"[{view_name}] Detected: {label} ({score:.2f}) "
-                    f"@ (x1={int(x1)}, y1={int(y1)}, x2={int(x2)}, y2={int(y2)})"
-                )
+                        f"[{view_name}] Detected: {label} ({score:.2f}) "
+                        f"@ (x1={int(x1)}, y1={int(y1)}, x2={int(x2)}, y2={int(y2)})"
+                    )
                     x1i, y1i, x2i, y2i = int(x1), int(y1), int(x2), int(y2)
                     cv2.rectangle(annotated, (x1i, y1i), (x2i, y2i), (0, 255, 0), 2)
                     cv2.putText(annotated, f"{label} {score:.2f}",
                                 (x1i, max(0, y1i - 6)),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-        # Publish detections (immer) – bestehendes Verhalten
+        # Publish detections (always) – existing behavior
         pub_d = self.pub_dets.get(view_name)
         if pub_d is not None:
             pub_d.publish(det_array)
 
-        # Klassisches annotiertes Topic (nur wenn >=1 Box & aktiviert)
+        # Classic annotated topic (only if >=1 box & enabled)
         if self.publish_annotated and annotated is not None and view_name in self.pub_imgs and num_boxes > 0:
             if self.publish_annotated_compressed:
                 ok, buf = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), self.annotated_jpeg_quality])
                 if not ok:
-                    self.get_logger().warn(f"JPEG-Encode für annotiertes Bild fehlgeschlagen ({view_name}).")
+                    self.get_logger().warn(f"JPEG encode for annotated image failed ({view_name}).")
                 else:
                     msg = CompressedImage()
                     msg.header = header
@@ -304,20 +302,20 @@ class YoloDetector(Node):
                 out_msg.header = header
                 self.pub_imgs[view_name].publish(out_msg)
 
-        # NEU: Gebündelte Custom-Message (immer)
+        # NEW: combined custom message (always)
         try:
             out_comp = CompressedImage()
             out_comp.header = header
             out_comp.format = "jpeg"
 
-            # annotiert falls vorhanden & >=1 Box, sonst Original
+            # annotated if available & >=1 box, otherwise original
             if annotated is not None and num_boxes > 0:
                 src_for_jpeg = annotated
                 ok, buf = cv2.imencode(".jpg", src_for_jpeg, [int(cv2.IMWRITE_JPEG_QUALITY), self.annotated_jpeg_quality])
                 if ok:
                     out_comp.data = np.asarray(buf).tobytes()
                 else:
-                    self.get_logger().warn(f"JPEG-Encode für LabeledDetections fehlgeschlagen ({view_name}).")
+                    self.get_logger().warn(f"JPEG encode for LabeledDetections failed ({view_name}).")
                     out_comp = None
 
                 labeled_msg = LabeledDetections()
@@ -329,13 +327,14 @@ class YoloDetector(Node):
                 if pub_lbl is not None:
                     pub_lbl.publish(labeled_msg)
         except Exception as e:
-            self.get_logger().warn(f"Publizieren LabeledDetections fehlgeschlagen ({view_name}): {e}")
+            self.get_logger().warn(f"Publishing LabeledDetections failed ({view_name}): {e}")
 
-        # Debug: Laufzeit
+        # Debug: runtime
         dt = time.time() - t0
         if dt > 0:
             fps = 1.0 / dt
             self.get_logger().debug(f"[{view_name}] boxes={num_boxes}  {fps:.1f} FPS ({dt*1000:.1f} ms)")
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -343,14 +342,14 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        print("Programm wurde mit Strg+C beendet.")
+        print("Program terminated with Ctrl+C.")
     finally:
         node.destroy_node()
         if rclpy.ok():
             try:
                 rclpy.shutdown()
             except Exception as e:
-                print(f"Shutdown bereits durchgeführt oder fehlgeschlagen: {e}")
+                print(f"Shutdown already performed or failed: {e}")
 
 
 if __name__ == "__main__":

@@ -36,7 +36,7 @@ class RicohPublisher(Node):
         self.declare_parameter("username", "THETAYR30101068")
         self.declare_parameter("password", "30101068")
 
-        # Ausgabe / Bandbreite
+        # output
         self.declare_parameter("processing_mode", "stitch_local")  # "stitch_local" | "camera_stitch"
         self.declare_parameter("timer_period", 1.0)                # s pro Bild
         self.declare_parameter("output_width", 1280)
@@ -50,7 +50,7 @@ class RicohPublisher(Node):
         self.declare_parameter("yaw_offset_deg", 0.0)
         self.declare_parameter("swap_halves", False)
 
-        # Speicherung (optional)
+        # Save Images (optional)
         self.declare_parameter("save_enabled", True)
         self.declare_parameter("save_dir", "./ricoh_theta_views")
         self.declare_parameter("path_to_images", "")
@@ -58,7 +58,7 @@ class RicohPublisher(Node):
         if not self.save_base_dir:
             self.get_logger().error("No path_to_images parameter provided")
 
-        # Parameter lesen
+        # read parameter
         self.CAMERA_IP = self.get_parameter("camera_ip").get_parameter_value().string_value
         self.USERNAME = self.get_parameter("username").get_parameter_value().string_value
         self.PASSWORD = self.get_parameter("password").get_parameter_value().string_value
@@ -82,9 +82,8 @@ class RicohPublisher(Node):
         # Auth / HTTP Session mit Timeouts
         self.auth = HTTPDigestAuth(self.USERNAME, self.PASSWORD)
         self._session = requests.Session()
-        # etwas großzügigeres Timeout
         self._timeout = (5.0, 20.0)  # (connect, read)
-        # kleiner Retry-Puffer auf der Session
+        # small Retry-Puffer on Session
         self._session.mount('http://', HTTPAdapter(pool_connections=4, pool_maxsize=8, max_retries=2))
 
         # QoS
@@ -94,11 +93,11 @@ class RicohPublisher(Node):
             depth=5,
         )
 
-        # Bewegungsstatus (optional via Odom-Subscription nutzbar)
+        # Moving status (optional via Odom-Subscription)
         self.robot_moving = False
         self.robot_was_moved = False
 
-        # Publisher (nur ein Ausgabebild)
+        # Publisher
         if self.publish_compressed:
             self.pub_view = self.create_publisher(CompressedImage, "/ricoh_theta/image/compressed", qos)
         else:
@@ -108,19 +107,19 @@ class RicohPublisher(Node):
         self.counter = 0
         self._last_capture_time = 0.0  # request_to_download (für Log)
 
-        # Pipeline: getrennte Pools für Steuerung und Download/Verarbeitung
+        # Pipeline: separate pools for control and download/processing
         self.control_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)   # takePicture + status + delete
         self.download_pool = concurrent.futures.ThreadPoolExecutor(max_workers=2)  # download + processing
         self._lock = threading.Lock()
-        self._capture_in_flight = False  # genau eine Aufnahme gleichzeitig
+        self._capture_in_flight = False
 
-        # Serialisierungs-Lock für alle /osc/commands/* Posts
+        # Serialisierungs-Lock for all /osc/commands/* Posts
         self._exec_lock = threading.Lock()
 
         # Kamera je nach Modus konfigurieren
         self.configure_mode()
 
-        # Annahme-Startgröße für Dual-Fisheye (nur relevant für stitch_local)
+        # assumed initial size for dual fisheye (relevant only for stitch_local)
         self.input_wh = (5376, 2688)
 
         # Remap-Maps vorbereiten (für stitch_local)
@@ -151,16 +150,15 @@ class RicohPublisher(Node):
                 if resp.status_code in (409, 503):
                     time.sleep(backoff_s * (2 ** attempt))
                     continue
-                # 4xx/5xx: Body loggen für Diagnose, dann Exception werfen
+                # 4xx/5xx: Body loggen for diagnose, than Exception
                 self.get_logger().error(f"HTTP {resp.status_code} @ {url} | payload={json_payload} | body={resp.text}")
                 resp.raise_for_status()
             except requests.RequestException as e:
                 last_exc = e
                 time.sleep(backoff_s * (2 ** attempt))
-        # wenn alle Versuche fehlschlagen
         if last_exc:
             raise last_exc
-        raise RuntimeError("Unbekannter Fehler in _post_with_retry")
+        raise RuntimeError("unknown Error in _post_with_retry")
 
     def _post_execute(self, payload: dict):
         url = f"http://{self.CAMERA_IP}/osc/commands/execute"
@@ -177,7 +175,7 @@ class RicohPublisher(Node):
         return resp
 
     def _delete_file(self, file_url: str):
-        """Löscht die angegebene Datei auf der Kamera (serialisiert, mit kleinem Delay)."""
+        """Deletes the specified file on the camera (serialized, with a small delay)."""
         try:
             # sehr kurzer Delay – einige Firmwares brauchen nach Download einen Moment
             time.sleep(0.2)
@@ -195,8 +193,8 @@ class RicohPublisher(Node):
     # -----------------------------
     def configure_mode(self):
         """
-        - stitch_local:     _imageStitching = "none"   (Kamera liefert Dual-Fisheye)
-        - camera_stitch:    _imageStitching = "dynamicSemiAuto" (Kamera liefert bereits equirect, sofern unterstützt)
+        - stitch_local:     _imageStitching = "none"   (Kamera send Dual-Fisheye)
+        - camera_stitch:    _imageStitching = "dynamicSemiAuto" (camera already provides equirect if supported)
         """
         try:
             if self.processing_mode == "camera_stitch":
@@ -208,27 +206,27 @@ class RicohPublisher(Node):
             self._post_execute(options_data)
             self.get_logger().info(f"_imageStitching={opt_val} (processing_mode={self.processing_mode})")
         except requests.RequestException as e:
-            self.get_logger().error(f"HTTP-Fehler bei setOptions: {e}")
+            self.get_logger().error(f"HTTP-Error in setOptions: {e}")
         except Exception as e:
-            self.get_logger().error(f"Fehler beim Konfigurieren: {e}")
+            self.get_logger().error(f"Error in konfiguration: {e}")
 
     # -----------------------------
-    # Hauptpipeline (Timer)
+    # Mainpipeline (Timer)
     # -----------------------------
     def capture_and_publish(self):
-        # Nicht auslösen, wenn Roboter in Bewegung
+        # Do not trigger when the robot is in motion
         if self.robot_moving:
             return
         with self._lock:
-            # Nur eine Aufnahme gleichzeitig auslösen/status-pollen
+            # Trigger or poll the status of only one recording at a time
             if self._capture_in_flight:
                 return
             self._capture_in_flight = True
-        # Auslösen/Status-Polling seriell im Steuerpool
+        # Triggering/status polling performed serially in the control pool
         self.control_pool.submit(self._trigger_and_enqueue_download)
 
     # -----------------------------
-    # Auslösen + Status polling; Download-Job einreihen
+    # Trigger + status polling; enqueue download job
     # -----------------------------
     def _trigger_and_enqueue_download(self):
         t_start = time.time()
@@ -243,7 +241,7 @@ class RicohPublisher(Node):
                 self.get_logger().error(f"Keine Command-ID erhalten: {data}")
                 return
 
-            # Status poll bis done (korrekt über /osc/commands/status)
+            # Status poll until done (korrekt über /osc/commands/status)
             deadline = time.time() + 20.0
             while time.time() < deadline:
                 st = self._post_status(cid)
@@ -256,23 +254,23 @@ class RicohPublisher(Node):
                 time.sleep(0.3)
 
             if not file_url:
-                self.get_logger().error("Aufnahme nicht abgeschlossen (Timeout).")
+                self.get_logger().error("Recording not completed (timeout).")
                 return
 
             # Download/Verarbeitung asynchron starten
             self.download_pool.submit(self._download_process_publish, file_url, t_start)
 
         except requests.RequestException as e:
-            self.get_logger().error(f"HTTP-Fehler bei Aufnahme: {e}")
+            self.get_logger().error(f"HTTP-Error in Recording: {e}")
         except Exception as e:
-            self.get_logger().error(f"Fehler bei Aufnahme: {e}")
+            self.get_logger().error(f"Error in Recording: {e}")
         finally:
-            # Freigeben, damit der Timer das nächste Auslösen anstoßen kann
+            # Release so the timer can trigger the next capture
             with self._lock:
                 self._capture_in_flight = False
 
     # -----------------------------
-    # Download + Verarbeitung + Publish + Delete
+    # Download + processing + publish + delete
     # -----------------------------
     def _download_process_publish(self, file_url: str, t_start: float):
         # 1) Download
@@ -286,16 +284,16 @@ class RicohPublisher(Node):
             self.get_logger().error(f"Download/Decode-Fehler: {e}")
             return
 
-        # 2) Nur für lokalen Stitch relevant: Map-Größen ggf. neu berechnen
+        # 2) Relevant only for local stitching: recalculate map sizes if necessary
         try:
             if self.processing_mode == "stitch_local":
                 h, w = img.shape[:2]
                 if (w, h) != self.input_wh:
-                    self.get_logger().warning(f"Unerwartete Rohgröße: {(w, h)} – berechne Maps neu.")
+                    self.get_logger().warning(f"Unexpected raw size: {(w, h)} – recalculating maps.")
                     self.input_wh = (w, h)
                     self._rebuild_maps()
         except Exception as e:
-            self.get_logger().warning(f"Map/Resize-Hinweis: {e}")
+            self.get_logger().warning(f"Map/Resize-notice: {e}")
 
         # 3) Verarbeitung
         t_proc0 = time.time()
@@ -304,17 +302,17 @@ class RicohPublisher(Node):
             if mode == "stitch_local":
                 out_img = self.stitch_dual_fisheye_fast(img)
                 if out_img is None:
-                    self.get_logger().error("Stitching fehlgeschlagen.")
+                    self.get_logger().error("Stitching failed.")
                     return
             elif mode == "camera_stitch":
                 out_img = cv2.resize(img, self.output_size, interpolation=cv2.INTER_AREA)
             else:
-                self.get_logger().warning(f"Unbekannter processing_mode='{mode}', fallback stitch_local.")
+                self.get_logger().warning(f"unknown processing_mode='{mode}', fallback stitch_local.")
                 out_img = self.stitch_dual_fisheye_fast(img)
                 if out_img is None:
                     return
         except Exception as e:
-            self.get_logger().error(f"Verarbeitungsfehler: {e}")
+            self.get_logger().error(f"Processing error: {e}")
             return
         t_proc1 = time.time()
 
@@ -323,22 +321,22 @@ class RicohPublisher(Node):
             stamp = self.timestamp.popleft()
             self._publish_img("view", out_img, stamp)
 
-        # 5) Optional speichern
+        # 5) optionally save
         if self.save_enabled:
             try:
                 now = datetime.now()
                 ts_str = now.strftime("%Y-%m-%d_%H-%M-%S.%f")
 
-                # Datei-Endung abhängig von publish_compressed
+                # file extension depends on publish_compressed
                 ext = ".jpg" if self.publish_compressed else ".png"
 
-                # Dateiname zusammensetzen
+                # filename combining
                 filename = f"{ts_str}_{mode}{ext}"
 
-                # Pfad aus Basisverzeichnis und Dateiname bauen
+                # construct path from base directory and filename
                 filepath = os.path.join(self.save_base_dir, filename)
 
-                # Bild speichern mit den jeweiligen Parametern
+                # save image with the respective parameters
                 if self.publish_compressed:
                     success = cv2.imwrite(
                         filepath,
@@ -355,13 +353,13 @@ class RicohPublisher(Node):
                 self.get_logger().warning(f"Error saving detection image: {e}")
                 
 
-        # 6) Datei auf Kamera löschen (seriell im control_pool)
+        # 6) delete file on camera (serially in control_pool)
         try:
             self.control_pool.submit(self._delete_file, file_url)
         except Exception as e:
-            self.get_logger().warning(f"Enqueue delete fehlgeschlagen: {e}")
+            self.get_logger().warning(f"Enqueue delete fail: {e}")
 
-        # 7) Zeiten loggen
+        # 7) time loggen
         request_to_download = max(0.0, t_proc0 - t_start)  # grob: Auslösen -> Download fertig (bis Start Verarbeitung)
         t_stitch = max(0.0, t_proc1 - t_proc0)
         t_total = (time.time() - t_start)
@@ -375,7 +373,7 @@ class RicohPublisher(Node):
         self.counter += 1
 
     # -----------------------------
-    # Publish-Helfer
+    # Publish-helper
     # -----------------------------
     def _publish_img(self, kind: str, img: np.ndarray, stamp):
         if self.robot_was_moved:
@@ -383,7 +381,7 @@ class RicohPublisher(Node):
         if self.publish_compressed:
             ok, buf = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), self.jpeg_quality])
             if not ok:
-                self.get_logger().error(f"JPEG-Encode fehlgeschlagen ({kind}).")
+                self.get_logger().error(f"JPEG-Encode failed ({kind}).")
                 return
             msg = CompressedImage()
             msg.header.stamp = stamp
@@ -398,7 +396,7 @@ class RicohPublisher(Node):
             self.pub_view.publish(ros_img)
 
     # -----------------------------
-    # Schnelles Stitching via Remap (lokal)
+    # fast Stitching via Remap (local)
     # -----------------------------
     @staticmethod
     def _safe_div(a, b, eps=1e-8):
@@ -501,17 +499,17 @@ class RicohPublisher(Node):
             return out
 
         except Exception as e:
-            self.get_logger().error(f"Fehler beim schnellen Stitching: {e}")
+            self.get_logger().error(f"Error in fast Stitching: {e}")
             return None
         
     def destroy_node(self):
-        # Timer stoppen
+        # Timer stop
         try:
             self.timer.cancel()
         except Exception:
             pass
 
-        # ThreadPools herunterfahren
+        # ThreadPools shutdown
         try:
             self.control_pool.shutdown(wait=True, cancel_futures=True)
         except Exception:
@@ -521,7 +519,7 @@ class RicohPublisher(Node):
         except Exception:
             pass
 
-        # Super-Methode aufrufen
+        # call Super-Methode
         super().destroy_node()
 
 

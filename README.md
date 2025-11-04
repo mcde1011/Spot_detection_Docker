@@ -1,5 +1,5 @@
 # Spot Detection and Mapping
-This Project detects fire extinguishers and emergency exit signs and approximates their position into an 2D Occupancy Map in Rviz.
+This project identifies fire extinguishers and emergency exit signs within a 360° image. It estimates the spatial position of the detected objects relative to the robot and visualizes them on a 2D occupancy map using RViz.
 
 ## Packages
 ### detection_msgs
@@ -8,9 +8,20 @@ Contains a custom message-type named **LabeledDetections.msg** which is used to 
 - **vision_msgs/Detection2DArray:** contains semantic image data like positions, sizes and classifications of Boundingboxes.
 - **sensor_msgs/CompressedImage:** result image with drawn in Boundingboxes
 
-### ricoh_theta_ros
+### ricoh_publisher
+**Input**
+- **camera image** Image von camera via HTTP request
 
-### theta camera
+**Output:**
+- **/ricoh_theta/image/compressed** Compressed Image from Camera
+- **/ricoh_theta/image** Not compressed Image
+
+### yolo_detector
+**Input**
+- **/ricoh_theta/image/compressed** Compressed Image from Camera
+
+**Output**
+- **/detections/[image]/labeled** LabeledDetections.msg of the detection results published by ricoh_theta_ros
 
 
 ### transform_to_map
@@ -26,7 +37,7 @@ Contains a custom message-type named **LabeledDetections.msg** which is used to 
 Before launching with compose up, the project has to be built.
 
 ```bash
-docker build
+docker build -t my-ros2:humble-gpu .
 docker compose up 
 ```
 
